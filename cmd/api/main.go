@@ -31,6 +31,7 @@ func main() {
 	router.POST("/invoices", handlers.CreateInvoice)
 	router.POST("/invoices/:id/pay", handlers.MarkAsPaid)
 	router.GET("/invoices", handlers.ListInvoices)
+	router.POST("/stripe/webhook", handlers.StripeWebhook)
 
 	log.Println("API KEY:", os.Getenv("RESEND_API_KEY"))
 

@@ -1,29 +1,48 @@
 package services
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/edsjcbra/flowtap/internal/database"
 )
 
 func CreateInvoice(clientID int, amount float64, dueDate time.Time) (int, error) {
-	query := `
+
+	// 1. cria invoice SEM payment_url
+	var invoiceID int
+	err := database.DB.QueryRow(`
 		INSERT INTO invoices (client_id, amount, due_date)
 		VALUES ($1, $2, $3)
 		RETURNING id
-	`
+	`, clientID, amount, dueDate).Scan(&invoiceID)
 
-	var invoiceID int
-	err := database.DB.QueryRow(query, clientID, amount, dueDate).Scan(&invoiceID)
 	if err != nil {
 		return 0, err
 	}
 
+	// 2. cria checkout no Stripe usando invoiceID
+	paymentURL, err := CreateCheckoutSession(amount, invoiceID)
+	if err != nil {
+		return 0, err
+	}
+
+	// 3. salva payment_url
+	_, err = database.DB.Exec(`
+		UPDATE invoices SET payment_url = $1 WHERE id = $2
+	`, paymentURL, invoiceID)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// 4. cria jobs automáticos
 	createJobs(invoiceID)
 
 	return invoiceID, nil
 }
 
+// 🔥 CRIA JOBS AUTOMÁTICOS
 func createJobs(invoiceID int) {
 	now := time.Now()
 
@@ -40,13 +59,14 @@ func createJobs(invoiceID int) {
 		`, invoiceID, runAt)
 
 		if err != nil {
-			// não quebra tudo, só logaria em produção
+			// em produção logaria
+			fmt.Println("")
 		}
 	}
 }
-
 func MarkInvoiceAsPaid(invoiceID int) error {
-	// marca invoice como paga
+
+	// 1. atualiza invoice
 	_, err := database.DB.Exec(`
 		UPDATE invoices
 		SET status = 'paid'
@@ -57,7 +77,7 @@ func MarkInvoiceAsPaid(invoiceID int) error {
 		return err
 	}
 
-	// cancela jobs pendentes
+	// 2. cancela jobs futuros
 	_, err = database.DB.Exec(`
 		UPDATE jobs
 		SET status = 'done'

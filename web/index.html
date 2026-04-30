@@ -76,7 +76,6 @@ async function createInvoice() {
       return;
     }
 
-    // 🔥 CORREÇÃO DEFINITIVA DE DATA (SEM BUG DE FUSO)
     const dueDate = rawDate + "T12:00:00Z";
 
     const res = await fetch(API + "/invoices", {

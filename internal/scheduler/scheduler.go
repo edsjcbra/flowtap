@@ -20,7 +20,7 @@ func Start() {
 
 func runPendingJobs() {
 	query := `
-		SELECT j.id, j.invoice_id, j.type, c.email
+		SELECT j.id, j.invoice_id, j.type, c.email, i.payment_url
 		FROM jobs j
 		JOIN invoices i ON j.invoice_id = i.id
 		JOIN clients c ON i.client_id = c.id
@@ -41,25 +41,32 @@ func runPendingJobs() {
 		var invoiceID int
 		var jobType string
 		var email string
+		var paymentURL string
 
-		err := rows.Scan(&id, &invoiceID, &jobType, &email)
+		err := rows.Scan(&id, &invoiceID, &jobType, &email, &paymentURL)
 		if err != nil {
 			log.Println("Error scanning job:", err)
 			continue
 		}
 
-		processJob(id, invoiceID, jobType, email)
+		processJob(id, invoiceID, jobType, email, paymentURL)
 	}
 }
 
-func processJob(id int, invoiceID int, jobType string, email string) {
+func processJob(id int, invoiceID int, jobType string, email string, paymentURL string) {
 	log.Printf("Processing job %d for invoice %d (%s)", id, invoiceID, jobType)
 	log.Println("Sending email to:", email)
 
+	body := `
+		<h2>Payment Reminder</h2>
+		<p>You have a pending invoice.</p>
+		<p><a href="` + paymentURL + `">👉 Pay Now</a></p>
+	`
+
 	err := services.SendEmail(
 		email,
-		"Payment Reminder",
-		"<h1>You have a pending invoice</h1>",
+		"Invoice Payment Reminder",
+		body,
 	)
 
 	if err != nil {
