@@ -19,10 +19,12 @@ func Start() {
 
 func runPendingJobs() {
 	query := `
-		SELECT id, invoice_id, type
-		FROM jobs
-		WHERE status = 'pending'
-		AND run_at <= NOW()
+		SELECT j.id, j.invoice_id, j.type
+		FROM jobs j
+		JOIN invoices i ON j.invoice_id = i.id
+		WHERE j.status = 'pending'
+		AND j.run_at <= NOW()
+		AND i.status != 'paid'
 	`
 
 	rows, err := database.DB.Query(query)
@@ -39,6 +41,7 @@ func runPendingJobs() {
 
 		err := rows.Scan(&id, &invoiceID, &jobType)
 		if err != nil {
+			log.Println("Error scanning job:", err)
 			continue
 		}
 
@@ -49,8 +52,7 @@ func runPendingJobs() {
 func processJob(id int, invoiceID int, jobType string) {
 	log.Printf("Processing job %d for invoice %d (%s)", id, invoiceID, jobType)
 
-	// 🔥 por enquanto só simula envio
-	// depois vamos integrar email/SMS
+	// aqui depois entra email/SMS real
 
 	_, err := database.DB.Exec(`
 		UPDATE jobs SET status = 'done' WHERE id = $1

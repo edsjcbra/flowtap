@@ -19,7 +19,6 @@ func CreateInvoice(clientID int, amount float64, dueDate time.Time) (int, error)
 		return 0, err
 	}
 
-
 	createJobs(invoiceID)
 
 	return invoiceID, nil
@@ -35,10 +34,35 @@ func createJobs(invoiceID int) {
 	}
 
 	for _, runAt := range jobs {
-		query := `
+		_, err := database.DB.Exec(`
 			INSERT INTO jobs (invoice_id, run_at, type)
 			VALUES ($1, $2, 'email')
-		`
-		database.DB.Exec(query, invoiceID, runAt)
+		`, invoiceID, runAt)
+
+		if err != nil {
+			// não quebra tudo, só logaria em produção
+		}
 	}
+}
+
+func MarkInvoiceAsPaid(invoiceID int) error {
+	// marca invoice como paga
+	_, err := database.DB.Exec(`
+		UPDATE invoices
+		SET status = 'paid'
+		WHERE id = $1
+	`, invoiceID)
+
+	if err != nil {
+		return err
+	}
+
+	// cancela jobs pendentes
+	_, err = database.DB.Exec(`
+		UPDATE jobs
+		SET status = 'done'
+		WHERE invoice_id = $1 AND status = 'pending'
+	`, invoiceID)
+
+	return err
 }

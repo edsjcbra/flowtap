@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flowtap</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    input {
+      margin: 5px;
+      padding: 8px;
+      width: 200px;
+    }
+
+    button {
+      padding: 8px 12px;
+      margin: 5px;
+      cursor: pointer;
+    }
+
+    ul {
+      margin-top: 10px;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .paid {
+      color: green;
+      font-weight: bold;
+    }
+
+    .pending {
+      color: orange;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Flowtap</h1>
+
+<!-- CREATE CLIENT -->
+<h2>Create Client</h2>
+<input id="clientName" placeholder="Name">
+<input id="clientEmail" placeholder="Email">
+<input id="clientPhone" placeholder="Phone">
+<button onclick="createClient()">Create Client</button>
+
+<!-- CREATE INVOICE -->
+<h2>Create Invoice</h2>
+<input id="invoiceClientId" placeholder="Client ID">
+<input id="amount" placeholder="Amount">
+<input id="dueDate" placeholder="YYYY-MM-DDTHH:MM:SSZ">
+<button onclick="createInvoice()">Create Invoice</button>
+
+<!-- INVOICES -->
+<h2>Invoices</h2>
+<button onclick="loadInvoices()">Refresh</button>
+<ul id="invoiceList"></ul>
+
+<script>
+const API = "http://localhost:8080";
+
+function logError(err) {
+  console.error(err);
+  alert("Erro: " + err.message);
+}
+
+// ================= CLIENT =================
+async function createClient() {
+  try {
+    const res = await fetch(API + "/clients", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        name: document.getElementById("clientName").value,
+        email: document.getElementById("clientEmail").value,
+        phone: document.getElementById("clientPhone").value
+      })
+    });
+
+    const data = await res.json();
+    alert("Client criado");
+
+  } catch (err) {
+    logError(err);
+  }
+}
+
+// ================= INVOICE =================
+async function createInvoice() {
+  try {
+    const res = await fetch(API + "/invoices", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        client_id: parseInt(document.getElementById("invoiceClientId").value),
+        amount: parseFloat(document.getElementById("amount").value),
+        due_date: document.getElementById("dueDate").value
+      })
+    });
+
+    const data = await res.json();
+    alert("Invoice criada ID: " + data.invoice_id);
+
+    loadInvoices();
+
+  } catch (err) {
+    logError(err);
+  }
+}
+
+// ================= PAY =================
+async function markPaid(id) {
+  try {
+    await fetch(API + "/invoices/" + id + "/pay", {
+      method: "POST"
+    });
+
+    loadInvoices();
+
+  } catch (err) {
+    logError(err);
+  }
+}
+
+// ================= LOAD =================
+async function loadInvoices() {
+  try {
+    const res = await fetch(API + "/invoices");
+
+    if (!res.ok) {
+      throw new Error("Erro ao buscar invoices");
+    }
+
+    const data = await res.json();
+
+    console.log("INVOICES:", data);
+
+    const list = document.getElementById("invoiceList");
+    list.innerHTML = "";
+
+    if (!data || data.length === 0) {
+      list.innerHTML = "<li>Nenhuma invoice encontrada</li>";
+      return;
+    }
+
+    data.forEach(inv => {
+      const li = document.createElement("li");
+
+      const statusClass = inv.status === "paid" ? "paid" : "pending";
+
+      li.innerHTML = `
+        <div>
+          ID: ${inv.id} | Cliente: ${inv.client_id} | $${inv.amount} 
+          <span class="${statusClass}">(${inv.status})</span>
+        </div>
+        <div>
+          ${inv.status === "pending" ? `<button onclick="markPaid(${inv.id})">Pay</button>` : ""}
+        </div>
+      `;
+
+      list.appendChild(li);
+    });
+
+  } catch (err) {
+    logError(err);
+  }
+}
+
+// ================= INIT =================
+window.onload = function () {
+  loadInvoices();
+};
+</script>
+
+</body>
+</html>
