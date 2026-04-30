@@ -3,71 +3,36 @@
 <head>
   <title>Flowtap</title>
   <style>
-    body {
-      font-family: Arial;
-      padding: 20px;
-    }
-
-    h1 {
-      margin-bottom: 20px;
-    }
-
-    input {
-      margin: 5px;
-      padding: 8px;
-      width: 200px;
-    }
-
-    button {
-      padding: 8px 12px;
-      margin: 5px;
-      cursor: pointer;
-    }
-
-    ul {
-      margin-top: 10px;
-      padding: 0;
-      list-style: none;
-    }
-
+    body { font-family: Arial; padding: 20px; }
+    input { margin: 5px; padding: 8px; width: 200px; }
+    button { padding: 8px 12px; margin: 5px; cursor: pointer; }
+    ul { margin-top: 10px; padding: 0; list-style: none; }
     li {
       padding: 10px;
       border-bottom: 1px solid #ddd;
       display: flex;
       justify-content: space-between;
-      align-items: center;
     }
-
-    .paid {
-      color: green;
-      font-weight: bold;
-    }
-
-    .pending {
-      color: orange;
-      font-weight: bold;
-    }
+    .paid { color: green; font-weight: bold; }
+    .pending { color: orange; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <h1>Flowtap</h1>
 
-<!-- CREATE CLIENT -->
 <h2>Create Client</h2>
 <input id="clientName" placeholder="Name">
 <input id="clientEmail" placeholder="Email">
 <input id="clientPhone" placeholder="Phone">
 <button onclick="createClient()">Create Client</button>
 
-<!-- CREATE INVOICE -->
 <h2>Create Invoice</h2>
 <input id="invoiceClientId" placeholder="Client ID">
 <input id="amount" placeholder="Amount">
-<input id="dueDate" placeholder="YYYY-MM-DDTHH:MM:SSZ">
+<input id="dueDate" type="date">
 <button onclick="createInvoice()">Create Invoice</button>
 
-<!-- INVOICES -->
 <h2>Invoices</h2>
 <button onclick="loadInvoices()">Refresh</button>
 <ul id="invoiceList"></ul>
@@ -83,7 +48,7 @@ function logError(err) {
 // ================= CLIENT =================
 async function createClient() {
   try {
-    const res = await fetch(API + "/clients", {
+    await fetch(API + "/clients", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
@@ -93,9 +58,7 @@ async function createClient() {
       })
     });
 
-    const data = await res.json();
     alert("Client criado");
-
   } catch (err) {
     logError(err);
   }
@@ -104,17 +67,37 @@ async function createClient() {
 // ================= INVOICE =================
 async function createInvoice() {
   try {
+    const clientId = parseInt(document.getElementById("invoiceClientId").value);
+    const amount = parseFloat(document.getElementById("amount").value);
+    const rawDate = document.getElementById("dueDate").value;
+
+    if (!clientId || !amount || !rawDate) {
+      alert("Preencha todos os campos");
+      return;
+    }
+
+    // 🔥 CORREÇÃO DEFINITIVA DE DATA (SEM BUG DE FUSO)
+    const dueDate = rawDate + "T12:00:00Z";
+
     const res = await fetch(API + "/invoices", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
-        client_id: parseInt(document.getElementById("invoiceClientId").value),
-        amount: parseFloat(document.getElementById("amount").value),
-        due_date: document.getElementById("dueDate").value
+        client_id: clientId,
+        amount: amount,
+        due_date: dueDate
       })
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    console.log("RESPONSE:", text);
+
+    if (!res.ok) {
+      alert("Erro: " + text);
+      return;
+    }
+
+    const data = JSON.parse(text);
     alert("Invoice criada ID: " + data.invoice_id);
 
     loadInvoices();
@@ -132,7 +115,6 @@ async function markPaid(id) {
     });
 
     loadInvoices();
-
   } catch (err) {
     logError(err);
   }
@@ -142,14 +124,7 @@ async function markPaid(id) {
 async function loadInvoices() {
   try {
     const res = await fetch(API + "/invoices");
-
-    if (!res.ok) {
-      throw new Error("Erro ao buscar invoices");
-    }
-
     const data = await res.json();
-
-    console.log("INVOICES:", data);
 
     const list = document.getElementById("invoiceList");
     list.innerHTML = "";
@@ -166,7 +141,7 @@ async function loadInvoices() {
 
       li.innerHTML = `
         <div>
-          ID: ${inv.id} | Cliente: ${inv.client_id} | $${inv.amount} 
+          ID: ${inv.id} | Cliente: ${inv.client_id} | $${inv.amount}
           <span class="${statusClass}">(${inv.status})</span>
         </div>
         <div>

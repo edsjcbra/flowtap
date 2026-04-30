@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/edsjcbra/flowtap/internal/database"
+	"github.com/edsjcbra/flowtap/internal/services"
 )
 
 func Start() {
@@ -19,9 +20,10 @@ func Start() {
 
 func runPendingJobs() {
 	query := `
-		SELECT j.id, j.invoice_id, j.type
+		SELECT j.id, j.invoice_id, j.type, c.email
 		FROM jobs j
 		JOIN invoices i ON j.invoice_id = i.id
+		JOIN clients c ON i.client_id = c.id
 		WHERE j.status = 'pending'
 		AND j.run_at <= NOW()
 		AND i.status != 'paid'
@@ -38,23 +40,36 @@ func runPendingJobs() {
 		var id int
 		var invoiceID int
 		var jobType string
+		var email string
 
-		err := rows.Scan(&id, &invoiceID, &jobType)
+		err := rows.Scan(&id, &invoiceID, &jobType, &email)
 		if err != nil {
 			log.Println("Error scanning job:", err)
 			continue
 		}
 
-		processJob(id, invoiceID, jobType)
+		processJob(id, invoiceID, jobType, email)
 	}
 }
 
-func processJob(id int, invoiceID int, jobType string) {
+func processJob(id int, invoiceID int, jobType string, email string) {
 	log.Printf("Processing job %d for invoice %d (%s)", id, invoiceID, jobType)
+	log.Println("Sending email to:", email)
 
-	// aqui depois entra email/SMS real
+	err := services.SendEmail(
+		email,
+		"Payment Reminder",
+		"<h1>You have a pending invoice</h1>",
+	)
 
-	_, err := database.DB.Exec(`
+	if err != nil {
+		log.Println("EMAIL ERROR:", err)
+		return
+	}
+
+	log.Println("EMAIL SENT SUCCESS")
+
+	_, err = database.DB.Exec(`
 		UPDATE jobs SET status = 'done' WHERE id = $1
 	`, id)
 

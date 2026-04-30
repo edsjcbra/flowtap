@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/edsjcbra/flowtap/internal/database"
 	"github.com/edsjcbra/flowtap/internal/handlers"
@@ -30,6 +31,8 @@ func main() {
 	router.POST("/invoices", handlers.CreateInvoice)
 	router.POST("/invoices/:id/pay", handlers.MarkAsPaid)
 	router.GET("/invoices", handlers.ListInvoices)
+
+	log.Println("API KEY:", os.Getenv("RESEND_API_KEY"))
 
 	log.Println("Server running on :8080")
 	router.Run(":8080")
