@@ -8,7 +8,6 @@ import (
 	"github.com/stripe/stripe-go/v78/checkout/session"
 )
 
-// 🔥 cria checkout do Stripe com invoice_id
 func CreateCheckoutSession(amount float64, invoiceID int) (string, error) {
 	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
 
@@ -31,7 +30,7 @@ func CreateCheckoutSession(amount float64, invoiceID int) (string, error) {
 			},
 		},
 
-		// 🔥 MUITO IMPORTANTE
+		
 		Metadata: map[string]string{
 			"invoice_id": strconv.Itoa(invoiceID),
 		},
