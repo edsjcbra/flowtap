@@ -7,15 +7,15 @@ import (
 	"github.com/edsjcbra/flowtap/internal/database"
 )
 
-func CreateInvoice(clientID int, amount float64, dueDate time.Time) (int, error) {
+func CreateInvoice(clientID int, amount float64, dueDate time.Time, userID int) (int, error) {
 
 	// 1. cria invoice SEM payment_url
 	var invoiceID int
 	err := database.DB.QueryRow(`
-		INSERT INTO invoices (client_id, amount, due_date)
-		VALUES ($1, $2, $3)
-		RETURNING id
-	`, clientID, amount, dueDate).Scan(&invoiceID)
+	INSERT INTO invoices (client_id, amount, due_date, user_id)
+	VALUES ($1, $2, $3, $4)
+	RETURNING id
+`	, clientID, amount, dueDate, userID).Scan(&invoiceID)
 
 	if err != nil {
 		return 0, err

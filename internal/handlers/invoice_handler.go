@@ -19,6 +19,7 @@ type CreateInvoiceRequest struct {
 
 func CreateInvoice(c *gin.Context) {
 	var req CreateInvoiceRequest
+	userID := c.GetInt("user_id")
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -31,7 +32,7 @@ func CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	id, err := services.CreateInvoice(req.ClientID, req.Amount, dueDate)
+	id, err := services.CreateInvoice(req.ClientID, req.Amount, dueDate, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -42,10 +43,30 @@ func CreateInvoice(c *gin.Context) {
 
 func MarkAsPaid(c *gin.Context) {
 	idStr := c.Param("id")
+	userID := c.GetInt("user_id")
 
 	invoiceID, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid invoice id"})
+		return
+	}
+
+
+	var exists bool
+	err = database.DB.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM invoices
+			WHERE id = $1 AND user_id = $2
+		)
+	`, invoiceID, userID).Scan(&exists)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !exists {
+		c.JSON(403, gin.H{"error": "not allowed"})
 		return
 	}
 
@@ -60,26 +81,33 @@ func MarkAsPaid(c *gin.Context) {
 	})
 }
 
+
 func ListInvoices(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
 	rows, err := database.DB.Query(`
 		SELECT id, client_id, amount, status
 		FROM invoices
+		WHERE user_id = $1
 		ORDER BY id DESC
-	`)
+	`, userID)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 	defer rows.Close()
 
-	var invoices []gin.H
+	invoices := []gin.H{}
 
 	for rows.Next() {
 		var id, clientID int
 		var amount float64
 		var status string
 
-		rows.Scan(&id, &clientID, &amount, &status)
+		if err := rows.Scan(&id, &clientID, &amount, &status); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 
 		invoices = append(invoices, gin.H{
 			"id":        id,

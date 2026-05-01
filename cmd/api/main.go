@@ -6,6 +6,7 @@ import (
 
 	"github.com/edsjcbra/flowtap/internal/database"
 	"github.com/edsjcbra/flowtap/internal/handlers"
+	"github.com/edsjcbra/flowtap/internal/middleware"
 	"github.com/edsjcbra/flowtap/internal/scheduler"
 	"github.com/gin-contrib/cors"
 
@@ -24,14 +25,19 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// CLIENTS
-	router.POST("/clients", handlers.CreateClient)
-
-	// INVOICES
-	router.POST("/invoices", handlers.CreateInvoice)
-	router.POST("/invoices/:id/pay", handlers.MarkAsPaid)
-	router.GET("/invoices", handlers.ListInvoices)
+	// 🔓 rotas públicas
+	router.POST("/signup", handlers.Signup)
+	router.POST("/login", handlers.Login)
 	router.POST("/stripe/webhook", handlers.StripeWebhook)
+
+	// 🔒 rotas protegidas
+	auth := router.Group("/")
+	auth.Use(middleware.AuthMiddleware())
+
+	auth.POST("/clients", handlers.CreateClient)
+	auth.POST("/invoices", handlers.CreateInvoice)
+	auth.GET("/invoices", handlers.ListInvoices)
+	auth.POST("/invoices/:id/pay", handlers.MarkAsPaid)
 
 	log.Println("API KEY:", os.Getenv("RESEND_API_KEY"))
 
