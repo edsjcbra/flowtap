@@ -1,3 +1,4 @@
+// Package handlers deals with the http requests
 package handlers
 
 import (
@@ -5,13 +6,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/edsjcbra/flowtap/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v78"
-	"github.com/stripe/stripe-go/v78/webhook"
 )
 
 func StripeWebhook(c *gin.Context) {
@@ -23,20 +22,12 @@ func StripeWebhook(c *gin.Context) {
 		return
 	}
 
-	endpointSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	var event stripe.Event
 
-	event, err := webhook.ConstructEventWithOptions(
-	body,
-	c.GetHeader("Stripe-Signature"),
-	endpointSecret,
-	webhook.ConstructEventOptions{
-		IgnoreAPIVersionMismatch: true,
-	},
-)
-
+	err = json.Unmarshal(body, &event)
 	if err != nil {
-		log.Println("Webhook signature error:", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("JSON error:", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
 		return
 	}
 

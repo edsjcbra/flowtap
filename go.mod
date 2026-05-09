@@ -6,6 +6,7 @@ require (
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
 	github.com/resend/resend-go/v2 v2.28.0
 	github.com/stripe/stripe-go/v78 v78.12.0

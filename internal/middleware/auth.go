@@ -12,7 +12,21 @@ import (
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		tokenString := c.GetHeader("Authorization")
+		authHeader := c.GetHeader("Authorization")
+		println("AUTH HEADER:", authHeader)
+
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+			c.Abort()
+			return
+		}
+
+		tokenString := authHeader
+
+		// remove "Bearer "
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
 
 		if tokenString == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
@@ -33,7 +47,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		claims := token.Claims.(jwt.MapClaims)
 		userID := int(claims["user_id"].(float64))
 
-		
 		c.Set("user_id", userID)
 
 		c.Next()

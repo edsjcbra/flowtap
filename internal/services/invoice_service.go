@@ -1,72 +1,125 @@
 package services
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/edsjcbra/flowtap/internal/database"
 )
 
-func CreateInvoice(clientID int, amount float64, dueDate time.Time, userID int) (int, error) {
+// ================= CREATE INVOICE =================
 
-	// 1. cria invoice SEM payment_url
+func CreateInvoice(
+	clientID int,
+	amount float64,
+	dueDate time.Time,
+	userID int,
+) (int, error) {
+
 	var invoiceID int
+
 	err := database.DB.QueryRow(`
-	INSERT INTO invoices (client_id, amount, due_date, user_id)
-	VALUES ($1, $2, $3, $4)
-	RETURNING id
-`	, clientID, amount, dueDate, userID).Scan(&invoiceID)
+		INSERT INTO invoices (
+			client_id,
+			amount,
+			status,
+			due_date,
+			user_id
+		)
+		VALUES ($1, $2, 'pending', $3, $4)
+		RETURNING id
+	`,
+		clientID,
+		amount,
+		dueDate,
+		userID,
+	).Scan(&invoiceID)
 
 	if err != nil {
 		return 0, err
 	}
 
-	// 2. cria checkout no Stripe usando invoiceID
-	paymentURL, err := CreateCheckoutSession(amount, invoiceID)
-	if err != nil {
-		return 0, err
+	now := time.Now()
+
+	// FIRST EMAIL
+
+	firstRun := dueDate
+
+	if !dueDate.After(now) {
+		firstRun = now.Add(2 * time.Second)
 	}
 
-	// 3. salva payment_url
 	_, err = database.DB.Exec(`
-		UPDATE invoices SET payment_url = $1 WHERE id = $2
-	`, paymentURL, invoiceID)
+		INSERT INTO jobs (
+			invoice_id,
+			run_at,
+			type,
+			status
+		)
+		VALUES ($1, $2, 'email', 'pending')
+	`,
+		invoiceID,
+		firstRun,
+	)
 
 	if err != nil {
 		return 0, err
 	}
 
-	// 4. cria jobs automáticos
-	createJobs(invoiceID)
+	// BASE DATE
+
+	baseDate := dueDate
+
+	if !dueDate.After(now) {
+		baseDate = now
+	}
+
+	// +2 DAYS
+
+	_, err = database.DB.Exec(`
+		INSERT INTO jobs (
+			invoice_id,
+			run_at,
+			type,
+			status
+		)
+		VALUES ($1, $2, 'email', 'pending')
+	`,
+		invoiceID,
+		baseDate.Add(2*24*time.Hour),
+	)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// +5 DAYS
+
+	_, err = database.DB.Exec(`
+		INSERT INTO jobs (
+			invoice_id,
+			run_at,
+			type,
+			status
+		)
+		VALUES ($1, $2, 'email', 'pending')
+	`,
+		invoiceID,
+		baseDate.Add(5*24*time.Hour),
+	)
+
+	if err != nil {
+		return 0, err
+	}
 
 	return invoiceID, nil
 }
 
-// 🔥 CRIA JOBS AUTOMÁTICOS
-func createJobs(invoiceID int) {
-	now := time.Now()
+// ================= MARK AS PAID =================
 
-	jobs := []time.Time{
-		now,
-		now.Add(3 * 24 * time.Hour),
-		now.Add(7 * 24 * time.Hour),
-	}
-
-	for _, runAt := range jobs {
-		_, err := database.DB.Exec(`
-			INSERT INTO jobs (invoice_id, run_at, type)
-			VALUES ($1, $2, 'email')
-		`, invoiceID, runAt)
-
-		if err != nil {
-			// em produção logaria
-			fmt.Println("")
-		}
-	}
-}
 func MarkInvoiceAsPaid(invoiceID int) error {
 
-	// 1. atualiza invoice
+	// invoice -> paid
+
 	_, err := database.DB.Exec(`
 		UPDATE invoices
 		SET status = 'paid'
@@ -77,11 +130,64 @@ func MarkInvoiceAsPaid(invoiceID int) error {
 		return err
 	}
 
-	// 2. cancela jobs futuros
+	// jobs -> paid
+
 	_, err = database.DB.Exec(`
 		UPDATE jobs
-		SET status = 'done'
-		WHERE invoice_id = $1 AND status = 'pending'
+		SET status = 'paid'
+		WHERE invoice_id = $1
+	`, invoiceID)
+
+	return err
+}
+
+// ================= CANCEL INVOICE =================
+
+func CancelInvoice(invoiceID int) error {
+
+	// invoice -> cancelled
+
+	_, err := database.DB.Exec(`
+		UPDATE invoices
+		SET status = 'cancelled'
+		WHERE id = $1
+	`, invoiceID)
+
+	if err != nil {
+		return err
+	}
+
+	// jobs -> cancelled
+
+	_, err = database.DB.Exec(`
+		UPDATE jobs
+		SET status = 'cancelled'
+		WHERE invoice_id = $1
+	`, invoiceID)
+
+	return err
+}
+
+// ================= DELETE INVOICE =================
+
+func DeleteInvoice(invoiceID int) error {
+
+	// delete jobs first
+
+	_, err := database.DB.Exec(`
+		DELETE FROM jobs
+		WHERE invoice_id = $1
+	`, invoiceID)
+
+	if err != nil {
+		return err
+	}
+
+	// delete invoice
+
+	_, err = database.DB.Exec(`
+		DELETE FROM invoices
+		WHERE id = $1
 	`, invoiceID)
 
 	return err
